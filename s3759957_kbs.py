@@ -1,33 +1,8 @@
 import csv
-
-def load_csv_sample(filepath, limit=10):
-    """
-    Load up to `limit` rows from a CSV file,
-    trim whitespace from each cell,
-    and return a list of dictionaries.
-    """
-    data = []
-    with open(filepath, mode='r', encoding='utf-8-sig') as file:
-        reader = csv.DictReader(file)
-        for i, row in enumerate(reader):
-            if i >= limit:
-                break
-            clean_row = {k.strip(): v.strip() for k, v in row.items() if v is not None}
-            data.append(clean_row)
-    return data
-
-
-# Example usage
-if __name__ == "__main__":
-    filepath = "healthcare_disease_dataset.csv"  # 👈 replace with your actual CSV file path
-    records = load_csv_sample(filepath)
-
-    print(f"Loaded {len(records)} records.")
-    # Print first few records for inspection
-    for i, rec in enumerate(records[:3], start=1):
-        print(f"{i}: {rec}")
-
-
+import re
+import difflib
+from nltk.stem import PorterStemmer
+from nltk.corpus import stopwords
 
 class KnowledgeBase:
     """
@@ -35,192 +10,284 @@ class KnowledgeBase:
     """
 
     def __init__(self, facts=None, rules=None):
-        """
-        Initialize the class with a dictionary and a list of dictionaries.
-
-        :param facts: A dictionary (default: empty dict)
-        :param rules: A list of dictionaries (default: empty list)
-        """
         self.facts = facts if facts is not None else {}
         self.rules = rules if rules is not None else []
 
-    # --------------------------
-    # Basic getter methods
-    # --------------------------
+# ----- GETTERS -----
 
     def get_all(self):
-        """
-        Get all facts and rules.
-        :return: A tuple (facts, rules)
-        """
         return self.facts, self.rules
 
     def get_fact(self, key):
-        """
-        Get a fact by its key.
-        :param key: The key to look up in the facts dictionary.
-        :return: The value if key exists, else None.
-        """
         return self.facts.get(key)
 
     def get_rule_by_key(self, key, value):
-        """
-        Find rules (dicts) in the rules list where a given key matches a value.
-        :param key: Key to search in each rule dictionary.
-        :param value: Value to match.
-        :return: List of matching rule dictionaries.
-        """
         return [rule for rule in self.rules if rule.get(key) == value]
 
-    # --------------------------
-    # Setter / Updater methods
-    # --------------------------
+# ----- SETTERS -----
 
     def set_fact(self, key, value):
-        """
-        Add or update a fact in the facts dictionary.
-        """
         self.facts[key] = value
 
     def add_rule(self, rule_dict):
-        """
-        Add a new rule (dictionary) to the rules list.
-        :param rule_dict: A dictionary representing a rule.
-        """
         if isinstance(rule_dict, dict):
             self.rules.append(rule_dict)
         else:
             raise TypeError("rule_dict must be a dictionary")
 
-    # --------------------------
-    # Display utility
-    # --------------------------
-
-    def display(self):
+    def load_csv_kbs(self, filepath, limit=10):
         """
-        Print the contents of facts and rules in a readable format.
+        Load up to `limit` rows from a CSV file,
+        trim whitespace from each cell,
+        and return a list of dictionaries.
         """
-        print("Facts:")
-        for key, value in self.facts.items():
-            print(f"  {key}: {value}")
+        data = []
+        with open(filepath, mode='r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for i, row in enumerate(reader):
+                if i >= limit:
+                    break
+                clean_row = {k.strip(): v.strip() for k, v in row.items() if v is not None}
+                data.append(clean_row)
+        return data
 
-        print("\nRules:")
-        for i, rule in enumerate(self.rules, 1):
-            print(f"  {i}: {rule}")
+    def load_healthcare_csv(self, filepath):
+        records = self.load_csv_kbs(filepath)
 
+        facts = {}
+        rules = []
+
+        for row in records:
+            # Expecting CSV columns:
+            # Disease, Keywords, Overview, Symptoms, Causes, Prevention,
+            # Diagnosis, Treatment, Preparing_for_your_appointment
+
+            disease = row.get("Disease", "")
+            keywords = row.get("Keywords", "")
+
+            key = f"{disease}, {keywords}".strip()
+
+            # ----- FACTS -----
+            facts[key] = row.get("Overview", "")
+
+            # ----- RULES -----
+            rule = {
+                "disease": key,
+                "value": True,
+                "Symptoms": row.get("Symptoms", ""),
+                "Causes": row.get("Causes", ""),
+                "Prevention": row.get("Prevention", ""),
+                "Diagnosis": row.get("Diagnosis", ""),
+                "Treatment": row.get("Treatment", ""),
+                "Preparing_for_your_appointment": row.get("Preparing_for_your_appointment", ""),
+            }
+
+            rules.append(rule)
+
+        self.facts = facts
+        self.rules = rules
 
 class InferenceEngine:
     """
-    A simple example class.
-    Describe what this class does here.
+    Inference Engine that:
+    1. Takes user input,
+    2. Performs full-text search across KnowledgeBase facts' keys,
+    3. Selects the highest match,
+    4. Retrieves the rules related to that fact key.
     """
 
-    def __init__(self, name, value):
+    def __init__(self, knowledge_base):
         """
-        Initialize the class with attributes.
-        :param name: A string representing the name.
-        :param value: A value to store.
+        Initialize with a KnowledgeBase object.
         """
-        self.name = name
-        self.value = value
+        self.kb = knowledge_base
 
-    def display_info(self):
+# ----- Compute match score between user input & key -----
+    def compute_score(self, user_text, fact_key):
         """
-        Display the class information.
+        Compute fuzzy similarity (0–100).
+        Uses SequenceMatcher to estimate typo-tolerant similarity.
         """
-        print(f"Name: {self.name}, Value: {self.value}")
+        return int(difflib.SequenceMatcher(None, user_text.lower(), fact_key.lower()).ratio() * 100)
 
-    def update_value(self, new_value):
+# ----- Find best fact match -----
+    def find_best_fact_key(self, user_input):
+        best_key = None
+        best_score = 0
+
+        for key in self.kb.facts.keys():
+            score = self.compute_score(user_input, key)
+            if score > best_score:
+                best_score = score
+                best_key = key
+
+        return best_key, best_score
+
+# ----- Get rules for best-matched fact -----
+    def infer(self, user_input):
         """
-        Update the stored value.
-        :param new_value: The new value to assign.
+        Perform inference:
+        - Find best-matching fact key
+        - Retrieve rules related to that key
+        - Return results in dictionary form
         """
-        self.value = new_value
-        print(f"Value updated to: {self.value}")
+
+        best_key, score = self.find_best_fact_key(user_input)
+
+        if best_key is None or score == 0:
+            return {
+                "match": None,
+                "score": 0,
+                "rules": [],
+                "message": "No relevant information found."
+            }
+
+        # Get matching rules
+        matched_rules = [
+            rule for rule in self.kb.rules 
+            if rule.get("disease") == best_key
+        ]
+
+        return {
+            "match": best_key,
+            "score": score,
+            "rules": matched_rules,
+            "overview": self.kb.facts.get(best_key, ""),
+            "message": "Match found."
+        }
 
 class NLPProcessor:
     """
-    A simple example class.
-    Describe what this class does here.
+    Processes user input text to extract cleaned main keywords:
+    - lowercase
+    - trim
+    - remove punctuation
+    - remove stopwords
+    - stemming
     """
 
-    def __init__(self, name, value):
-        """
-        Initialize the class with attributes.
-        :param name: A string representing the name.
-        :param value: A value to store.
-        """
-        self.name = name
-        self.value = value
+    def __init__(self):
+        self.stemmer = PorterStemmer()
+        try:
+            self.stop_words = set(stopwords.words("english"))
+        except:
+            import nltk
+            nltk.download("stopwords")
+            self.stop_words = set(stopwords.words("english"))
 
-    def display_info(self):
+# ----- Basic cleaning -----
+    def clean_text(self, text):
+        if not isinstance(text, str):
+            return ""
+
+        text = text.lower().strip()                       # lowercase + trim
+        text = re.sub(r"[^\w\s]", " ", text)              # remove punctuation
+        text = re.sub(r"\d+", " ", text)                  # remove numbers
+        text = re.sub(r"\s+", " ", text)                  # normalize whitespace
+
+        return text
+
+# ----- Tokenization + stopword removal -----
+    def tokenize(self, text):
+        tokens = text.split()
+        filtered = [w for w in tokens if w not in self.stop_words]
+        return filtered
+
+# ----- Stemming -----
+    def stem_tokens(self, tokens):
+        return [self.stemmer.stem(t) for t in tokens]
+
+    def extract_keywords(self, user_input):
+        cleaned = self.clean_text(user_input)
+        tokens = self.tokenize(cleaned)
+        stems = self.stem_tokens(tokens)
+
+        # remove duplicates but preserve original order
+        seen = set()
+        keywords = []
+        for word in stems:
+            if word not in seen:
+                seen.add(word)
+                keywords.append(word)
+
+        return " ".join(keywords) 
+
+    # Debug
+    def debug(self, text):
+        print("Original:", text)
+        print("Cleaned:", self.clean_text(text))
+        print("Tokens:", self.tokenize(self.clean_text(text)))
+        print("Stems:", self.stem_tokens(self.tokenize(self.clean_text(text))))
+        print("Keywords:", self.extract_keywords(text))
+
+class KnowledgeBaseQuery(InferenceEngine):
+    """
+    Inherit from InferenceEngine if fuzzy search does not return a result
+    """
+
+    def compute_score(self, user_text, fact_key):
+        """
+        Create a relevance score based on substring presence
+        and word overlap.
+        """
+
+        text = user_text.lower()
+        key = fact_key.lower()
+
+        score = 0
+
+        # 1 — substring match gives big score
+        if text in key:
+            score += 5
+
+        # 2 — word intersection score
+        text_words = set(re.findall(r"\w+", text))
+        key_words = set(re.findall(r"\w+", key))
+
+        score += len(text_words & key_words)
+
+        return score
+
+class HealthcareQAProgram:
+    """
+
+    """
+
+    def __init__(self):
+        pass
+
+    def handle_user_input(self, user_input):
         """
         Display the class information.
         """
         print(f"Name: {self.name}, Value: {self.value}")
 
-    def update_value(self, new_value):
-        """
-        Update the stored value.
-        :param new_value: The new value to assign.
-        """
-        self.value = new_value
-        print(f"Value updated to: {self.value}")
+    def run(self):
 
-class KnowledgeBaseQuery:
-    """
-    A simple example class.
-    Describe what this class does here.
-    """
+        # KnowledgeBase class
+        filepath = "healthcare_disease_dataset.csv"
+        kb = KnowledgeBase()
+        kb.load_healthcare_csv(filepath)
 
-    def __init__(self, name, value):
-        """
-        Initialize the class with attributes.
-        :param name: A string representing the name.
-        :param value: A value to store.
-        """
-        self.name = name
-        self.value = value
+        # InferenceEngine class
+        ie = InferenceEngine(knowledge_base=kb)
 
-    def display_info(self):
-        """
-        Display the class information.
-        """
-        print(f"Name: {self.name}, Value: {self.value}")
+        # KnowledgeBaseQuery class
+        kbq = KnowledgeBaseQuery(knowledge_base=kb)
 
-    def update_value(self, new_value):
-        """
-        Update the stored value.
-        :param new_value: The new value to assign.
-        """
-        self.value = new_value
-        print(f"Value updated to: {self.value}")
+        # NLPProcessor class
+        processor = NLPProcessor()
 
-class UserInput:
-    """
-    A simple example class.
-    Describe what this class does here.
-    """
+        print("Enter your symptoms or questions (type 'quit' to exit):")
 
-    def __init__(self, name, value):
-        """
-        Initialize the class with attributes.
-        :param name: A string representing the name.
-        :param value: A value to store.
-        """
-        self.name = name
-        self.value = value
+        while True:
+            user_input = input("\nYou: ").strip()
 
-    def handle_user_input(self):
-        """
-        Display the class information.
-        """
-        print(f"Name: {self.name}, Value: {self.value}")
+            if user_input.lower().strip() == "quit":
+                print("Goodbye!")
+                break
+            else:
+                print("Hi How can I help you?")
 
-    def update_value(self, new_value):
-        """
-        Update the stored value.
-        :param new_value: The new value to assign.
-        """
-        self.value = new_value
-        print(f"Value updated to: {self.value}")
+program = HealthcareQAProgram()
+program.run()
