@@ -3,6 +3,9 @@ import re
 import difflib
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
+import os
+import json
+
 
 class KnowledgeBase:
     """
@@ -212,82 +215,119 @@ class NLPProcessor:
 
         return " ".join(keywords) 
 
-    # Debug
-    def debug(self, text):
-        print("Original:", text)
-        print("Cleaned:", self.clean_text(text))
-        print("Tokens:", self.tokenize(self.clean_text(text)))
-        print("Stems:", self.stem_tokens(self.tokenize(self.clean_text(text))))
-        print("Keywords:", self.extract_keywords(text))
 
 class KnowledgeBaseQuery(InferenceEngine):
-    """
-    Inherit from InferenceEngine if fuzzy search does not return a result
-    """
 
-    def compute_score(self, user_text, fact_key):
+    def list_conditions(self):
         """
-        Create a relevance score based on substring presence
-        and word overlap.
+        Display all fact keys (diseases) with index numbers.
+        """
+        self.index_map = {}   # number -> fact_key
+
+        print("\nAvailable Conditions:\n")
+        print(f"[0] Quit")
+        for i, key in enumerate(self.kb.facts.keys(), start=1):
+            print(f"[{i}] {key}")
+            self.index_map[str(i)] = key   # store mapping for later
+
+    def infer(self):
+        """
+        Ask user to choose a disease number.
+        Validate the number.
+        Return rules for selected fact key.
         """
 
-        text = user_text.lower()
-        key = fact_key.lower()
+        # Ask user
+        user_input = input("\nEnter option number: ").strip()   
+        
+        # Prompt to quit 
+        if user_input == '0':
+            return None
 
-        score = 0
+        # Validate input
+        if user_input not in self.index_map:
+            print("Invalid option. Please enter a valid number.")
+            return None
 
-        # 1 — substring match gives big score
-        if text in key:
-            score += 5
+        # Fetch fact key
+        fact_key = self.index_map[user_input]
 
-        # 2 — word intersection score
-        text_words = set(re.findall(r"\w+", text))
-        key_words = set(re.findall(r"\w+", key))
+        # Retrieve rules associated with that fact key
+        matched_rules = [
+            rule for rule in self.kb.rules
+            if rule.get("disease") == fact_key
+        ]
 
-        score += len(text_words & key_words)
+        # Prepare response
+        result = {
+            "option": fact_key,
+            "rules": matched_rules,
+            "overview": self.kb.facts.get(fact_key, ""),
+            "message": "Match found."
+        }
 
-        return score
+        # Clear terminal
+        os.system('cls' if os.name == 'nt' else 'clear')
+        return result
+
 
 class HealthcareQAProgram:
     """
-
+    Class for main Program Interface 
     """
 
     def __init__(self):
-        pass
+        # KnowledgeBase class
+        filepath = "healthcare_disease_dataset.csv"
+        self.kb = KnowledgeBase()
+        self.kb.load_healthcare_csv(filepath)
 
-    def handle_user_input(self, user_input):
+        # InferenceEngine class
+        self.ie = InferenceEngine(knowledge_base=self.kb)
+
+        # KnowledgeBaseQuery class
+        self.kbq = KnowledgeBaseQuery(knowledge_base=self.kb)
+
+        # NLPProcessor class
+        self.processor = NLPProcessor()
+
+    def handle_user_input(self):
         """
         Display the class information.
         """
-        print(f"Name: {self.name}, Value: {self.value}")
+        user_input = input("\nInput: ").strip()
 
+        if user_input.lower().strip() == "quit":
+            # Clear terminal
+            os.system('cls' if os.name == 'nt' else 'clear')
+            print("Goodbye!")
+            return 0
+        if user_input.lower().strip() == "manual":
+            self.kbq.list_conditions()
+            answer = self.kbq.infer()
+            if answer:
+                print(json.dumps(answer, indent=4, ensure_ascii=False))
+            return 1
+
+        answer = self.processor.extract_keywords(user_input.lower().strip())
+        answer = self.ie.infer(answer)
+        if answer['match'] == None:
+            print("No conditions found by Inference Engine. Please search manually.")
+            self.kbq.list_conditions()
+            answer = self.kbq.infer()
+            if answer:
+                print(json.dumps(answer, indent=4, ensure_ascii=False))
+            return 1
+        else: 
+            print(json.dumps(answer, indent=4, ensure_ascii=False))
+            return 1
+    # Main program 
     def run(self):
-
-        # KnowledgeBase class
-        filepath = "healthcare_disease_dataset.csv"
-        kb = KnowledgeBase()
-        kb.load_healthcare_csv(filepath)
-
-        # InferenceEngine class
-        ie = InferenceEngine(knowledge_base=kb)
-
-        # KnowledgeBaseQuery class
-        kbq = KnowledgeBaseQuery(knowledge_base=kb)
-
-        # NLPProcessor class
-        processor = NLPProcessor()
-
-        print("Enter your symptoms or questions (type 'quit' to exit):")
-
         while True:
-            user_input = input("\nYou: ").strip()
-
-            if user_input.lower().strip() == "quit":
-                print("Goodbye!")
-                break
-            else:
-                print("Hi How can I help you?")
+            print("\nEnter your symptoms or questions (type 'quit' to exit or 'manual' to search manually):")
+            query = self.handle_user_input()
+            if not query:
+                break 
 
 program = HealthcareQAProgram()
 program.run()
