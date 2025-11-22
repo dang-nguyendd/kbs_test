@@ -1,13 +1,44 @@
-import csv
-import re
-import difflib
-from nltk.stem import PorterStemmer
-from nltk.corpus import stopwords
-import os
-import json
+#__________ Requirements.txt __________
+# annotated-types==0.7.0
+# blis==1.3.3
+# catalogue==2.0.10
+# certifi==2025.11.12
+# charset-normalizer==3.4.4
+# click==8.3.1
+# cloudpathlib==0.23.0
+# colorama==0.4.6
+# confection==0.1.5
+# cymem==2.0.13
+# en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
+# idna==3.11
+# Jinja2==3.1.6
+# MarkupSafe==3.0.3
+# murmurhash==1.0.15
+# numpy==2.3.5
+# packaging==25.0
+# preshed==3.0.12
+# pydantic==2.12.4
+# pydantic_core==2.41.5
+# requests==2.32.5
+# setuptools==80.9.0
+# smart_open==7.5.0
+# spacy==3.8.11
+# spacy-legacy==3.0.12
+# spacy-loggers==1.0.5
+# srsly==2.5.2
+# thinc==8.3.10
+# tqdm==4.67.1
+# typer-slim==0.20.0
+# typing-inspection==0.4.2
+# typing_extensions==4.15.0
+# urllib3==2.5.0
+# wasabi==1.1.3
+# weasel==0.4.3
+# wrapt==2.0.1
 
+import spacy
 
-treatment_fact = {
+treatment_fact_json = {
   "hyperhidrosis": "Treating hyperhidrosis may start with treating the condition causing it. If a cause isn't found, treatment focuses on controlling heavy sweating. If new self-care habits don't improve your symptoms, your health care provider may suggest one or more of the following treatments. Even if your sweating improves after treatment, it may recur.",
   "bartholin_s_cyst": "Often a Bartholin's cyst requires no treatments especially if the cyst causes no signs or symptoms. When needed, treatment depends on the size of the cyst, your discomfort level and whether it's infected, which can result in an abscess.\n\nTreatment options your doctor may recommend include:\n\nSurgical drainage.You may need surgery to drain a cyst that's infected or very large. Drainage of a cyst can be done using local anesthesia or sedation.\n\nFor the procedure, your doctor makes a small incision in the cyst, allows it to drain, and then places a small rubber tube (catheter) in the incision. The catheter stays in place for up to six weeks to keep the incision open and allow complete drainage.\n\nRarely, for persistent cysts that aren't effectively treated by the above procedures, your doctor may recommend surgery to remove the Bartholin's gland. Surgical removal is usually done in a hospital under general anesthesia. Surgical removal of the gland carries a greater risk of bleeding or complications after the procedure.",
   "infant_reflux": "For most babies, making some changes to feeding eases infant reflux until it gets better on its own.",
@@ -20,7 +51,7 @@ treatment_fact = {
   "acute_sinusitis": "Most cases of acute sinusitis get better on their own. Self-care is usually all that's needed to ease symptoms."
 }
 
-advice_fact = {
+advice_fact_json = {
   "hyperhidrosis": "You may start by seeing your primary care provider. You may then be referred to a specialist in diagnosing and treating conditions of the hair and skin (dermatologist). If your condition is not responding to treatment, you may be referred to a specialist in the nervous system (neurologist) or a surgeon.\nHere's some information to help you get ready for your appointment.",
   "bartholin_s_cyst": "Your first appointment will likely be with either your primary care provider or a doctor who specializes in conditions that affect women (gynecologist).",
   "infant_reflux": "You may start by seeing your baby's primary healthcare team. Or you may be referred to a specialist in children's digestive diseases, called a pediatric gastroenterologist.",
@@ -33,7 +64,7 @@ advice_fact = {
   "acute_sinusitis": "If your symptoms are serious, you might need emergency medical care. \nIf your symptoms are less serious, you may start by seeing your healthcare professional. Or you may be referred right away to a doctor who specializes in nervous system conditions, known as a neurologist."
 }
 
-rules = [
+rules_json = [
   {
     "id": "hyperhidrosis",
     "conditions": [
@@ -151,302 +182,212 @@ rules = [
 
 
 
+#__________ KNOWLEDGE BASE __________
+
 class KnowledgeBase:
-    """
-    A class that holds a dictionary of facts and a list of rule dictionaries.
-    """
+    def __init__(self):
+        self.domain_knowledge = {}     # treatments, advice, descriptions
+        self.inference_rules = []      # symptom → condition rules
 
-    def __init__(self, facts=None, rules=None):
-        self.facts = facts if facts is not None else {}
-        self.rules = rules if rules is not None else []
+    def load_domain_knowledge(self, knowledge):
+        self.domain_knowledge.update(knowledge)
+
+    def load_inference_rules(self, rules):
+        self.inference_rules.extend(rules)
 
 
-    def load_csv_kbs(self, filepath, limit=14):
-        """
-        Load up to `limit` rows from a CSV file,
-        trim whitespace from each cell,
-        and return a list of dictionaries.
-        """
-        data = []
-        with open(filepath, mode='r', encoding='utf-8-sig') as file:
-            reader = csv.DictReader(file)
-            for i, row in enumerate(reader):
-                if i >= limit:
-                    break
-                clean_row = {k.strip(): v.strip() for k, v in row.items() if v is not None}
-                data.append(clean_row)
-        return data
-
-    def load_healthcare_csv(self, filepath):
-        records = self.load_csv_kbs(filepath)
-
-        facts = {}
-        rules = []
-
-        for row in records:
-            # Expecting CSV columns:
-            # Disease, Treatment, Overview, Symptoms, Preparing_for_your_appointment
-
-            disease = row.get("Disease", "")
-            keywords = row.get("Symptoms", "")
-
-            key = f"{disease}, {keywords}".strip()
-
-            # ----- FACTS -----
-            facts[key] = row.get("Overview", "")
-
-            # ----- RULES -----
-            rule = {
-                "Disease": key,
-                "Value": True,
-                "Symptoms": row.get("Symptoms", ""),
-                "Treatment": row.get("Treatment", ""),
-                "Preparing for your appointment": row.get("Preparing for your appointment", ""),
-            }
-
-            rules.append(rule)
-
-        self.facts = facts
-        self.rules = rules
+#__________ INFERENCE ENGINE __________
 
 class InferenceEngine:
-    """
-    Inference Engine that:
-    1. Takes user input,
-    2. Performs full-text search across KnowledgeBase facts' keys,
-    3. Selects the highest match,
-    4. Retrieves the rules related to that fact key.
-    """
+    def __init__(self, kb):
+        self.kb = kb
 
-    def __init__(self, knowledge_base):
-        """
-        Initialize with a KnowledgeBase object.
-        """
-        self.kb = knowledge_base
+    def infer(self, user_entities: dict):
+        diagnoses = []
+        for rule in self.kb.inference_rules:
+            if self.apply_rule(rule, user_entities):
+                diagnoses.append(rule["id"])
+        return diagnoses
 
-# ----- Compute match score between user input & key -----
-    def compute_score(self, user_text, fact_key):
-        """
-        Compute fuzzy similarity (0–100).
-        Uses SequenceMatcher to estimate typo-tolerant similarity.
-        """
-        return int(difflib.SequenceMatcher(None, user_text.lower(), fact_key.lower()).ratio() * 100)
+    def apply_rule(self, rule, user_entities, threshold=0.5):
+        conditions = rule["conditions"]
+        matches = 0
 
-# ----- Find best fact match -----
-    def find_best_fact_key(self, user_input):
-        best_key = None
-        best_score = 0
+        for cond in conditions:
+            if self.check_condition(cond, user_entities):
+                matches += 1
 
-        for key in self.kb.facts.keys():
-            score = self.compute_score(user_input, key)
-            if score > best_score:
-                best_score = score
-                best_key = key
+        match_ratio = matches / len(conditions)
+        return match_ratio >= threshold
 
-        return best_key, best_score
 
-# ----- Get rules for best-matched fact -----
-    def infer(self, user_input):
-        """
-        Perform inference:
-        - Find best-matching fact key
-        - Retrieve rules related to that key
-        - Return results in dictionary form
-        """
+    def check_condition(self, condition, user_entities):
+        key = condition["attribute"]
+        expected = condition["value"]
+        if key not in user_entities:
+            return False
+        return user_entities[key] == expected
 
-        best_key, score = self.find_best_fact_key(user_input)
 
-        if best_key is None or score <= 20:
-            return {
-                "match": None,
-                "score": 0,
-                "rules": [],
-                "message": "No relevant information found."
-            }
-
-        # Get matching rules
-        matched_rules = [
-            rule for rule in self.kb.rules 
-            if rule.get("Disease") == best_key
-        ]
-
-        return {
-            "match": best_key,
-            "score": score,
-            "rules": matched_rules,
-            "overview": self.kb.facts.get(best_key, ""),
-            "message": "Match found."
-        }
+#__________ NLP PROCESSOR __________
 
 class NLPProcessor:
-    """
-    Processes user input text to extract cleaned main keywords:
-    - lowercase
-    - trim
-    - remove punctuation
-    - remove stopwords
-    - stemming
-    """
-
     def __init__(self):
-        self.stemmer = PorterStemmer()
-        try:
-            self.stop_words = set(stopwords.words("english"))
-        except:
-            import nltk
-            nltk.download("stopwords")
-            self.stop_words = set(stopwords.words("english"))
+        self.nlp = spacy.load("en_core_web_sm")
+        self.has_ner = True
 
-# ----- Basic cleaning -----
-    def clean_text(self, text):
-        if not isinstance(text, str):
-            return ""
+        # map wording → symptom key
+        self.symptom_map = {
+            "sweat": "excessive_sweating",
+            "clammy": "clammy_skin",
+            "odor": "body_odor",
+            "irritation": "skin_irritation",
+            "social": "social_discomfort",
 
-        text = text.lower().strip()                       # lowercase + trim
-        text = re.sub(r"[^\w\s]", " ", text)              # remove punctuation
-        text = re.sub(r"\d+", " ", text)                  # remove numbers
-        text = re.sub(r"\s+", " ", text)                  # normalize whitespace
+            "vaginal lump": "vaginal_lump",
+            "intercourse": "discomfort_during_intercourse",
+            "walk": "pain_while_walking_or_sitting",
+            "sit": "pain_while_walking_or_sitting",
+            "swell": "swelling",
+            "redness": "redness_if_infected",
 
-        return text
+            "spit": "spitting_up",
+            "vomit": "vomiting",
+            "irritable": "irritability_after_feeding",
+            "cough": "coughing",
+            "feed": "poor_feeding",
+            "arch": "arching_of_back",
 
-# ----- Tokenization + stopword removal -----
-    def tokenize(self, text):
-        tokens = text.split()
-        filtered = [w for w in tokens if w not in self.stop_words]
-        return filtered
+            "lump": "painful_lumps",
+            "blackhead": "blackheads",
+            "abscess": "skin_abscesses",
+            "tunnel": "draining_tunnels",
+            "scar": "scarring",
 
-# ----- Stemming -----
-    def stem_tokens(self, tokens):
-        return [self.stemmer.stem(t) for t in tokens]
+            "fatigue": "fatigue",
+            "infection": "frequent_infections",
+            "bruise": "bruising",
+            "nosebleed": "nosebleeds",
+            "bone pain": "bone_pain",
+            "pale": "pale_skin",
 
-    def extract_keywords(self, user_input):
-        cleaned = self.clean_text(user_input)
-        tokens = self.tokenize(cleaned)
-        stems = self.stem_tokens(tokens)
+            "tingle": "tingling",
+            "weak": "weakness_in_legs",
+            "paralysis": "paralysis",
+            "breath": "difficulty_breathing",
+            "reflex": "loss_of_reflexes",
 
-        # remove duplicates but preserve original order
-        seen = set()
-        keywords = []
-        for word in stems:
-            if word not in seen:
-                seen.add(word)
-                keywords.append(word)
+            "urine": "decreased_urine_output",
+            "confuse": "confusion",
+            "nausea": "nausea",
 
-        return " ".join(keywords) 
+            "fever": "fever",
+            "lymph": "swollen_lymph_nodes",
 
+            "diarrhea": "diarrhea",
+            "burn": "skin_burns",
+            "hair loss": "hair_loss",
 
-class KnowledgeBaseQuery(InferenceEngine):
-
-    def list_conditions(self):
-        """
-        Display all fact keys (diseases) with index numbers.
-        """
-        self.index_map = {}   # number -> fact_key
-
-        print("\nAvailable Conditions:\n")
-        print(f"[0] Quit")
-        for i, key in enumerate(self.kb.facts.keys(), start=1):
-            print(f"[{i}] {key}")
-            self.index_map[str(i)] = key   # store mapping for later
-
-    def infer(self):
-        """
-        Ask user to choose a disease number.
-        Validate the number.
-        Return rules for selected fact key.
-        """
-
-        # Ask user
-        user_input = input("\nEnter option number: ").strip()   
-        
-        # Prompt to quit 
-        if user_input == '0':
-            return None
-
-        # Validate input
-        if user_input not in self.index_map:
-            print("Invalid option. Please enter a valid number.")
-            return None
-
-        # Fetch fact key
-        fact_key = self.index_map[user_input]
-
-        # Retrieve rules associated with that fact key
-        matched_rules = [
-            rule for rule in self.kb.rules
-            if rule.get("Disease") == fact_key
-        ]
-
-        # Prepare response
-        result = {
-            "option": fact_key,
-            "rules": matched_rules,
-            "overview": self.kb.facts.get(fact_key, ""),
-            "message": "Match found."
+            "seizure": "recurrent_seizures",
+            "memory": "memory_issues",
+            "behavior": "behavioral_changes",
         }
 
-        # Clear terminal
-        os.system('cls' if os.name == 'nt' else 'clear')
-        return result
+    def process_query(self, text):
+
+        text = text.lower()
+        doc = self.nlp(text)
+
+        entities = {}
+
+        for token in doc:
+            lemma = token.lemma_
+            if lemma in self.symptom_map:
+                key = self.symptom_map[lemma]
+                entities[key] = True
+
+        intent = "symptoms"
+        return {"intent": intent, "entities": entities}
 
 
+#__________ KNOWLEDGE BASE QUERY __________
+
+class KnowledgeBaseQuery:
+    def __init__(self, kb):
+        self.kb = kb
+
+    def query(self, condition_id):
+        if condition_id in self.kb.domain_knowledge:
+            return self.kb.domain_knowledge[condition_id]
+        return "No information available."
+
+#__________ MAIN INTERFACE __________
 class HealthcareQAProgram:
     """
     Class for main Program Interface 
     """
-
     def __init__(self):
-        # KnowledgeBase class
-        filepath = "healthcare_disease_dataset.csv"
         self.kb = KnowledgeBase()
-        self.kb.load_healthcare_csv(filepath)
+        self.nlp = NLPProcessor()
 
-        # InferenceEngine class
-        self.ie = InferenceEngine(knowledge_base=self.kb)
+    def build_kb(self, treatment_fact, advice_fact, rules):
+        self.kb = KnowledgeBase()
 
-        # KnowledgeBaseQuery class
-        self.kbq = KnowledgeBaseQuery(knowledge_base=self.kb)
+        # Merge treatments + advice facts
+        merged = {}
+        for cond, text in treatment_fact.items():
+            merged[f"{cond}_treatment"] = text
+        for cond, text in advice_fact.items():
+            merged[f"{cond}_advice"] = text
 
-        # NLPProcessor class
-        self.processor = NLPProcessor()
+        self.kb.load_domain_knowledge(merged)
+        self.kb.load_inference_rules(rules)
 
-    def handle_user_input(self):
-        """
-        Display the class information.
-        """
-        user_input = input("\nInput: ").strip()
+    def handle_user_input(self, text):
+        structured = self.nlp.process_query(text)
 
-        if user_input.lower().strip() == "quit":
-            # Clear terminal
-            os.system('cls' if os.name == 'nt' else 'clear')
-            print("Goodbye!")
-            return 0
-        if user_input.lower().strip() == "manual":
-            self.kbq.list_conditions()
-            answer = self.kbq.infer()
-            if answer:
-                print(json.dumps(answer, indent=4, ensure_ascii=False))
-            return 1
+        diagnoses = InferenceEngine(self.kb).infer(structured["entities"])
 
-        answer = self.processor.extract_keywords(user_input.lower().strip())
-        answer = self.ie.infer(answer)
-        if answer['match'] == None:
-            print("No conditions found by Inference Engine. Please search manually.")
-            self.kbq.list_conditions()
-            answer = self.kbq.infer()
-            if answer:
-                print(json.dumps(answer, indent=4, ensure_ascii=False))
-            return 1
+        if diagnoses:
+            diagnosis = diagnoses[0]
+
+            treatment = self.kb.domain_knowledge.get(f"{diagnosis}_treatment", "No treatment info.")
+            advice = self.kb.domain_knowledge.get(f"{diagnosis}_advice", "No advice info.")
+
+            print("\n--- RESULT ---")
+            print("Structured input:", structured)
+            print("Diagnosis:", diagnosis)
+            print("Treatment:", treatment)
+            print("Advice:", advice)
+            print()
         else: 
-            print(json.dumps(answer, indent=4, ensure_ascii=False))
-            return 1
+            print("\n--- RESULT ---")
+            print("Structured input:", structured)
+            print("Diagnosis:", 'unknown')
+            print("Treatment:", None)
+            print("Advice:", None)
+            print()
+
     # Main program 
     def run(self):
-        while True:
-            print("\nEnter your symptoms or questions (type 'quit' to exit or 'manual' to search manually):")
-            query = self.handle_user_input()
-            if not query:
-                break 
+        treatment_fact = treatment_fact_json
+        advice_fact = advice_fact_json
+        rules = rules_json
 
-program = HealthcareQAProgram()
-program.run()
+        kb = self.build_kb(treatment_fact, advice_fact, rules)
+
+        print("Medical Diagnosis Knowledge-Based System")
+        print("Describe your symptoms (type 'quit' to exit).")
+
+        while True:
+            user = input("> ").strip()
+            if user in ("quit", "exit"):
+                break
+            self.handle_user_input(user)
+
+
+if __name__ == "__main__":
+    program = HealthcareQAProgram()
+    program.run()
+
+
