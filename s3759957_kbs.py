@@ -38,6 +38,63 @@
 
 import spacy
 
+symptom_fact_json = {
+  "excessive_sweating": "Excessive sweating is perspiration that is much heavier than normal and unrelated to heat or exercise.",
+  "clammy_skin": "Clammy skin means the skin feels cool and moist, often due to sweating.",
+  "skin_irritation": "Skin irritation refers to redness, itching, or discomfort caused by inflammation of the skin.",
+  "body_odor": "Body odor is the unpleasant smell produced when sweat mixes with bacteria on the skin.",
+  "social_discomfort": "Social discomfort means feeling embarrassed or anxious around others because of symptoms.",
+
+  "vaginal_lump": "A vaginal lump is a noticeable swelling or mass near the vaginal opening.",
+  "pain_while_walking_or_sitting": "Pain while walking or sitting means discomfort that worsens with movement or pressure.",
+  "discomfort_during_intercourse": "Discomfort during intercourse refers to pain or irritation felt during sexual activity.",
+  "swelling": "Swelling is an abnormal enlargement of an area of the body due to fluid buildup or inflammation.",
+  "redness_if_infected": "Redness if infected indicates that the area turns red when inflammation or infection is present.",
+
+  "spitting_up": "Spitting up is when a baby brings milk or food back up shortly after feeding.",
+  "irritability_after_feeding": "Irritability after feeding means a baby becomes fussy or uncomfortable following meals.",
+  "coughing": "Coughing is a forceful release of air from the lungs to clear the airway.",
+  "poor_feeding": "Poor feeding means a baby is not eating well or has difficulty taking in adequate nutrition.",
+  "arching_of_back": "Arching of the back refers to a baby bending backward, often showing discomfort.",
+
+  "painful_lumps": "Painful lumps are tender swellings under the skin that cause discomfort.",
+  "skin_abscesses": "Skin abscesses are pockets of pus that form due to infection.",
+  "blackheads": "Blackheads are small dark bumps caused by clogged hair follicles.",
+  "draining_tunnels": "Draining tunnels are tracts under the skin that leak fluid or pus.",
+  "scarring": "Scarring is the formation of thickened or discolored skin after injury or inflammation.",
+
+  "fatigue": "Fatigue is a persistent feeling of tiredness or lack of energy.",
+  "frequent_infections": "Frequent infections mean getting illnesses more often than usual due to a weakened immune system.",
+  "bruising": "Bruising is discoloration of the skin caused by bleeding under the surface.",
+  "nosebleeds": "Nosebleeds involve bleeding from the inside of the nose.",
+  "bone_pain": "Bone pain is aching or tenderness felt deep inside the bones.",
+  "pale_skin": "Pale skin means the skin appears lighter than usual due to reduced blood flow or anemia.",
+
+  "weakness_in_legs": "Weakness in the legs means reduced strength or difficulty moving the lower limbs.",
+  "tingling": "Tingling is a pins-and-needles sensation often caused by nerve irritation.",
+  "paralysis": "Paralysis is the loss of the ability to move part of the body.",
+  "difficulty_breathing": "Difficulty breathing means feeling short of breath or unable to inhale normally.",
+  "loss_of_reflexes": "Loss of reflexes refers to reduced or absent automatic muscle responses.",
+
+  "decreased_urine_output": "Decreased urine output means producing much less urine than normal.",
+  "confusion": "Confusion is difficulty thinking clearly, remembering, or making decisions.",
+  "nausea": "Nausea is the sensation of wanting to vomit.",
+
+  "fever": "Fever is a higher-than-normal body temperature, usually due to infection.",
+  "swollen_lymph_nodes": "Swollen lymph nodes are enlarged glands caused by infection or inflammation.",
+
+  "vomiting": "Vomiting is forcefully expelling stomach contents through the mouth.",
+  "diarrhea": "Diarrhea is having loose, watery stools more often than usual.",
+  "skin_burns": "Skin burns are injuries to the skin caused by heat, chemicals, or radiation.",
+  "hair_loss": "Hair loss refers to unusual or excessive shedding of hair.",
+
+  "recurrent_seizures": "Recurrent seizures are repeated episodes of abnormal brain activity causing convulsions or altered awareness.",
+  "memory_issues": "Memory issues involve difficulty remembering information or events.",
+  "behavioral_changes": "Behavioral changes are noticeable differences in mood, personality, or actions.",
+  "confusion": "Confusion is difficulty thinking clearly or understanding the environment."
+}
+
+
 treatment_fact_json = {
   "hyperhidrosis": "Treating hyperhidrosis may start with treating the condition causing it. If a cause isn't found, treatment focuses on controlling heavy sweating. If new self-care habits don't improve your symptoms, your health care provider may suggest one or more of the following treatments. Even if your sweating improves after treatment, it may recur.",
   "bartholin_s_cyst": "Often a Bartholin's cyst requires no treatments especially if the cyst causes no signs or symptoms. When needed, treatment depends on the size of the cyst, your discomfort level and whether it's infected, which can result in an abscess.\n\nTreatment options your doctor may recommend include:\n\nSurgical drainage.You may need surgery to drain a cyst that's infected or very large. Drainage of a cyst can be done using local anesthesia or sedation.\n\nFor the procedure, your doctor makes a small incision in the cyst, allows it to drain, and then places a small rubber tube (catheter) in the incision. The catheter stays in place for up to six weeks to keep the incision open and allow complete drainage.\n\nRarely, for persistent cysts that aren't effectively treated by the above procedures, your doctor may recommend surgery to remove the Bartholin's gland. Surgical removal is usually done in a hospital under general anesthesia. Surgical removal of the gland carries a greater risk of bleeding or complications after the procedure.",
@@ -52,10 +109,10 @@ treatment_fact_json = {
 }
 
 advice_fact_json = {
-  "hyperhidrosis": "You may start by seeing your primary care provider. You may then be referred to a specialist in diagnosing and treating conditions of the hair and skin (dermatologist). If your condition is not responding to treatment, you may be referred to a specialist in the nervous system (neurologist) or a surgeon.\nHere's some information to help you get ready for your appointment.",
+  "hyperhidrosis": "You may start by seeing your primary care provider. You may then be referred to a specialist in diagnosing and treating conditions of the hair and skin (dermatologist). If your condition is not responding to treatment, you may be referred to a specialist in the nervous system (neurologist) or a surgeon.",
   "bartholin_s_cyst": "Your first appointment will likely be with either your primary care provider or a doctor who specializes in conditions that affect women (gynecologist).",
   "infant_reflux": "You may start by seeing your baby's primary healthcare team. Or you may be referred to a specialist in children's digestive diseases, called a pediatric gastroenterologist.",
-  "hidradenitis_suppurativa": "You'll likely first see your primary care provider. You might then be referred to a health care provider who specializes in diagnosing and treating skin diseases, also known as a dermatologist. Depending on the severity of your condition, your care also might involve specialists in colorectal surgery, plastic surgery or gastroenterology.\nHere's some information to help you get ready for your appointment.",
+  "hidradenitis_suppurativa": "You'll likely first see your primary care provider. You might then be referred to a health care provider who specializes in diagnosing and treating skin diseases, also known as a dermatologist. Depending on the severity of your condition, your care also might involve specialists in colorectal surgery, plastic surgery or gastroenterology.",
   "acute_myelogenous_leukemia": "Make an appointment with your healthcare professional if you have symptoms that worry you. You may be referred to a doctor who specializes in blood cell diseases. This type of doctor is called a hematologist.\nAppointments can be brief, and there's a lot of information to discuss. It's a good idea to be prepared. Here's some information to help you get ready:",
   "guillain_barre_syndrome": "You may be referred to a doctor who specializes in disorders of the brain and nervous system, known as a neurologist.",
   "acute_kidney_injury": "Most people are in a hospital when they get acute kidney injury. If you aren't in the hospital and have symptoms of kidney failure, make an appointment with your family healthcare professional right away. You may be referred to a specialist in kidney disease, called a nephrologist.\nBefore your appointment, write down questions. Consider asking:\nWhat's the most likely cause of my symptoms?\nHave my kidneys stopped working? What could have caused my kidney failure?\nWhat tests do I need?\nWhat are my treatment choices, and what are the risks?\nDo I need to go to the hospital?\nWill my kidneys recover or will I need dialysis?\nI have other health conditions. How can I best manage these conditions together?\nDo I need to eat a special diet? If so, can you refer me to a dietitian to help me plan what to eat?\nDo you have printed materials about acute kidney injury that I can have? What websites do you suggest?",
@@ -313,13 +370,23 @@ class NLPProcessor:
 #__________ KNOWLEDGE BASE QUERY __________
 
 class KnowledgeBaseQuery:
-    def __init__(self, kb):
-        self.kb = kb
+    """Return domain symptom when no rule fires."""
+    def __init__(self, symptom_dict):
+        self.symptom = symptom_dict
 
-    def query(self, condition_id):
-        if condition_id in self.kb.domain_knowledge:
-            return self.kb.domain_knowledge[condition_id]
-        return "No information available."
+    def lookup(self, entities: dict):
+        hits = []
+        for key in entities:
+          # Find any symptom key that contains the rule ID
+          for condition in self.symptom:
+              if condition.startswith(key.split("_")[0]): 
+                  hits.append(self.symptom[condition])
+
+        if not hits:
+            hits.append("No diagnosis matched. Please provide more symptoms.")
+
+        return hits
+
 
 #__________ MAIN INTERFACE __________
 class HealthcareQAProgram:
@@ -330,7 +397,7 @@ class HealthcareQAProgram:
         self.kb = KnowledgeBase()
         self.nlp = NLPProcessor()
 
-    def build_kb(self, treatment_fact, advice_fact, rules):
+    def build_kb(self, treatment_fact, advice_fact, symptom_fact, rules):
         self.kb = KnowledgeBase()
 
         # Merge treatments + advice facts
@@ -339,9 +406,13 @@ class HealthcareQAProgram:
             merged[f"{cond}_treatment"] = text
         for cond, text in advice_fact.items():
             merged[f"{cond}_advice"] = text
+        for cond, text in symptom_fact.items():
+            merged[f"{cond}_symptom"] = text
 
         self.kb.load_domain_knowledge(merged)
         self.kb.load_inference_rules(rules)
+
+        return self.kb
 
     def handle_user_input(self, text):
         structured = self.nlp.process_query(text)
@@ -349,32 +420,38 @@ class HealthcareQAProgram:
         diagnoses = InferenceEngine(self.kb).infer(structured["entities"])
 
         if diagnoses:
-            diagnosis = diagnoses[0]
+          diagnosis = diagnoses[0]
 
-            treatment = self.kb.domain_knowledge.get(f"{diagnosis}_treatment", "No treatment info.")
-            advice = self.kb.domain_knowledge.get(f"{diagnosis}_advice", "No advice info.")
+          treatment = self.kb.domain_knowledge.get(f"{diagnosis}_treatment", "No treatment info.")
+          advice = self.kb.domain_knowledge.get(f"{diagnosis}_advice", "No advice info.")
+
+          print("\n--- RESULT ---")
+          print("Structured input:", structured)
+          print("Diagnosis:", diagnosis)
+          print("Treatment:", treatment)
+          print("Advice:", advice)
+          print()
+        else:
+            # Fallback
+            fallback = KnowledgeBaseQuery(self.kb.domain_knowledge).lookup(structured["entities"])
 
             print("\n--- RESULT ---")
             print("Structured input:", structured)
-            print("Diagnosis:", diagnosis)
-            print("Treatment:", treatment)
-            print("Advice:", advice)
+            print("Diagnosis: None found")
+            print("Symptom Explanation:")
+            for a in fallback:
+                print(" -", a)
             print()
-        else: 
-            print("\n--- RESULT ---")
-            print("Structured input:", structured)
-            print("Diagnosis:", 'unknown')
-            print("Treatment:", None)
-            print("Advice:", None)
-            print()
+
 
     # Main program 
     def run(self):
         treatment_fact = treatment_fact_json
         advice_fact = advice_fact_json
+        symptom_fact = symptom_fact_json
         rules = rules_json
 
-        kb = self.build_kb(treatment_fact, advice_fact, rules)
+        self.build_kb(treatment_fact, advice_fact, symptom_fact, rules)
 
         print("Medical Diagnosis Knowledge-Based System")
         print("Describe your symptoms (type 'quit' to exit).")
